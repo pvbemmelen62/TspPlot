@@ -1,5 +1,7 @@
 package tsp.plot;
 
+import static java.awt.event.KeyEvent.*;
+
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.*;
@@ -10,12 +12,15 @@ import javax.swing.*;
 
 import tsp.*;
 import tsp.Point;
+import tsp.plot.TextUtil.*;
 
+@SuppressWarnings("serial")
 public class Plotter {
   private static final String nl = System.getProperty("line.separator");
   
   private JFrame frame;
   private Canvas canvas;
+  FontMetrics metrics;
   String fileName;
   Point[] points;
   BoundingBox bbox;
@@ -24,6 +29,9 @@ public class Plotter {
 //  private Font fontBold;
   AffineTransform Tzoom;
   AffineTransform Ttrans;
+  boolean showPointNumbers;
+  boolean showOrderNumbers;
+
   
   public static void usage() {
     String msg =
@@ -65,6 +73,9 @@ public class Plotter {
     public void run() {
       frame = new JFrame("Plotter " + fileName);
       frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+      
+      fontPlain = null;
+      metrics = null;
       
       Tzoom = new AffineTransform();
       
@@ -122,7 +133,6 @@ public class Plotter {
     }
     
   }
-  @SuppressWarnings("serial")
   private class Canvas extends JPanel {
     
     Canvas() {
@@ -130,6 +140,12 @@ public class Plotter {
       addMouseWheelListener(ma);
       addMouseMotionListener(ma);
       addMouseListener(ma);
+      ActionMap acMap = getActionMap();
+      acMap.put("TogglePointNumbers", new TogglePointNumbersAction());
+      acMap.put("ToggleOrderNumbers", new ToggleOrderNumbersAction());
+      InputMap inMap = getInputMap();
+      inMap.put(KeyStroke.getKeyStroke(VK_P, 0), "TogglePointNumbers");
+      inMap.put(KeyStroke.getKeyStroke(VK_O, 0), "ToggleOrderNumbers");
     }
 
     @Override
@@ -145,9 +161,14 @@ public class Plotter {
       g2.fillRect(0,0,w,h);
       g2.setColor(Color.BLACK);
       int fontSize = 12;
-      fontPlain = new Font("SansSerif", Font.PLAIN, fontSize);
+      if(fontPlain==null) {
+        fontPlain = new Font("SansSerif", Font.PLAIN, fontSize);
 //      fontBold = new Font("SansSerif", Font.BOLD, (int)(fontSize*1.2));
+      }
       g2.setFont(fontPlain);
+      if(metrics==null) {
+        metrics = g2.getFontMetrics(fontPlain);
+      }
       if(points==null) {
         return;
       }
@@ -177,8 +198,8 @@ public class Plotter {
       int[] order = solution.order;
       Util.myAssert(order.length == points.length);
       int N = points.length;
-      Point2D prev = new Point2D.Double();
-      Point2D cur = new Point2D.Double();
+      Point2D.Double prev = new Point2D.Double();
+      Point2D.Double cur = new Point2D.Double();
       for(int i=0; i<order.length; ++i) {
         if(i==0) {
           Point p = points[order[i]];
@@ -190,6 +211,36 @@ public class Plotter {
             (int)cur.getX(), (int)cur.getY() );
         prev.setLocation(cur);
       }
+      if(showPointNumbers || showOrderNumbers) {
+        Util.myAssert(!(showPointNumbers && showOrderNumbers));
+        for(int i=0; i<order.length; ++i) {
+          Point p = points[order[i]];
+          transform(T, p, cur);
+          Anchor anchor = Anchor.ML;
+          String s = "" + (showPointNumbers ? order[i] : i);
+          TextUtil.drawAnchoredText(s, cur, g2, metrics, anchor, null);
+        }
+      }
+      drawCornerCoordinates(g2, T, h, w);
+    }
+  }
+  private void drawCornerCoordinates(Graphics2D g2, AffineTransform T,
+      int h, int w) {
+    Anchor[] anchors = { Anchor.UL, Anchor.LL, Anchor.UR, Anchor.LR };
+    AffineTransform Tinv;
+    try { Tinv = T.createInverse(); }
+    catch (NoninvertibleTransformException e) {
+      throw new IllegalStateException(e);
+    }
+    Point[] g2Corners = { new Point(0,0), new Point(0,h), new Point(w,0),
+        new Point(w,h)
+    };
+    for(int i=0; i<4; ++i) {
+      Point2D.Double q = new Point2D.Double();
+      transform(Tinv, g2Corners[i], q);
+      String s = String.format("%g,%g", q.x, q.y);
+      TextUtil.drawAnchoredText(s, g2Corners[i].toPoint2D(), g2, metrics,
+          anchors[i], g2.getBackground());
     }
   }
   private void transform(AffineTransform at, Point p, Point2D p2) {
@@ -207,6 +258,20 @@ public class Plotter {
     int startAngle = 0;
     int arcAngle = 360;
     g2.fillArc(x, y, width, height, startAngle, arcAngle);
+  }
+  class TogglePointNumbersAction extends AbstractAction {
+    public void actionPerformed(ActionEvent e) {
+      showPointNumbers = !showPointNumbers;
+      showOrderNumbers = false;
+      canvas.repaint();
+    }
+  }
+  class ToggleOrderNumbersAction extends AbstractAction {
+    public void actionPerformed(ActionEvent e) {
+      showOrderNumbers = !showOrderNumbers;
+      showPointNumbers = false;
+      canvas.repaint();
+    }
   }
   private void readFilePoints(String fileName) {
     try (BufferedReader br = new BufferedReader(new FileReader(fileName))) {

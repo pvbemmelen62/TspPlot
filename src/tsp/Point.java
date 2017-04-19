@@ -1,5 +1,7 @@
 package tsp;
 
+import java.awt.geom.*;
+
 public class Point {
 
   public double x;
@@ -12,6 +14,10 @@ public class Point {
   public Point(double x, double y) {
     this.x = x;
     this.y = y;
+  }
+  public Point(Point p) {
+    this.x = p.x;
+    this.y = p.y;
   }
   @Override
   public String toString() {
@@ -27,5 +33,8 @@ public class Point {
     Point that = p;
     double rv = Util.sqr(this.x-that.x) + Util.sqr(this.y-that.y);
     return rv;
+  }
+  public Point2D.Double toPoint2D() {
+    return new Point2D.Double(x, y);
   }
 }
